@@ -67,9 +67,10 @@ def convert_audio():
 
         print("bark work....")
         sample_rate, audio_array = tts.long_form_synthesize(response_text)
-        
-        print("Sample rate:", sample_rate)
-        print("Audio array first 10 samples:", audio_array[:10])
+
+        #for debug
+        # print("Sample rate:", sample_rate)
+        # print("Audio array first 10 samples:", audio_array[:10])
 
 
         max_int16 = np.iinfo(np.int16).max
