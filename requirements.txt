@@ -19,6 +19,8 @@ filelock==3.13.1
 frozenlist==1.4.1
 fsspec==2024.3.1
 funcy==2.0
+Flask==2.1.2
+Flask-Cors==3.0.10
 huggingface-hub==0.22.0
 identify==2.5.35
 idna==3.6
@@ -55,6 +57,7 @@ pyaml==23.12.0
 PyAudio==0.2.14
 pycparser==2.21
 pydantic==2.6.4
+pydub==0.25.1
 pydantic_core==2.16.3
 Pygments==2.17.2
 python-dateutil==2.9.0.post0
@@ -83,3 +86,4 @@ typing_extensions==4.10.0
 urllib3==2.2.1
 virtualenv==20.25.1
 yarl==1.9.4
+
