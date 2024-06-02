@@ -1,19 +1,27 @@
-import time
-import threading
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS 
 import numpy as np
 import whisper
-import sounddevice as sd
-from queue import Queue
-from rich.console import Console
+from pydub import AudioSegment
+import os
+from io import BytesIO
+import requests
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
 from tts import TextToSpeechService
+from scipy.io.wavfile import write as write_wav
 
-console = Console()
+
+app = Flask(__name__) 
+CORS(app) 
+
+
 stt = whisper.load_model("base.en")
 tts = TextToSpeechService()
+
+
 
 template = """
 You are a helpful and friendly AI assistant. You are polite, respectful, and aim to provide concise responses of less 
@@ -34,119 +42,67 @@ chain = ConversationChain(
     llm=Ollama(),
 )
 
+@app.route('/api/convert', methods=['POST'])
+def convert_audio():
+    audio_file = request.files['audio']
+    audio_data = audio_file.read()
 
-def record_audio(stop_event, data_queue):
-    """
-    Captures audio data from the user's microphone and adds it to a queue for further processing.
+    try:
+        print("receive audio...")
+        audio = AudioSegment.from_file(BytesIO(audio_data), format="webm")
+        byte_stream = BytesIO()
+        audio.export(byte_stream, format="wav")
+        audio_np = np.array(audio.get_array_of_samples()).astype(np.float32) / 32768.0
+    except Exception as e:
+        return jsonify(error=str(e)), 400
 
-    Args:
-        stop_event (threading.Event): An event that, when set, signals the function to stop recording.
-        data_queue (queue.Queue): A queue to which the recorded audio data will be added.
+    if audio_np.size > 0:
+        print("whisper work....")
+        text = transcribe(audio_np)
+        try:
+            print("ollama work....")
+            response_text = get_llm_response(text)
+        except requests.ConnectionError as e:
+            return jsonify(error="Failed to connect to Ollama server: " + str(e)), 500
 
-    Returns:
-        None
-    """
-    def callback(indata, frames, time, status):
-        if status:
-            console.print(status)
-        data_queue.put(bytes(indata))
+        print("bark work....")
+        sample_rate, audio_array = tts.long_form_synthesize(response_text)
+        
+        print("Sample rate:", sample_rate)
+        print("Audio array first 10 samples:", audio_array[:10])
 
-    with sd.RawInputStream(
-        samplerate=16000, dtype="int16", channels=1, callback=callback
-    ):
-        while not stop_event.is_set():
-            time.sleep(0.1)
+
+        max_int16 = np.iinfo(np.int16).max
+        audio_array = (audio_array * max_int16).astype(np.int16)
+
+        byte_stream = BytesIO()
+        write_wav(byte_stream, sample_rate, audio_array)
+        byte_stream.seek(0)
+
+        return send_file(
+            byte_stream,
+            mimetype='audio/wav',
+            as_attachment=True,
+            download_name='response.wav'
+        )
+    else:
+        return jsonify(error="No audio recorded"), 400
 
 
 def transcribe(audio_np: np.ndarray) -> str:
-    """
-    Transcribes the given audio data using the Whisper speech recognition model.
-
-    Args:
-        audio_np (numpy.ndarray): The audio data to be transcribed.
-
-    Returns:
-        str: The transcribed text.
-    """
     result = stt.transcribe(audio_np, fp16=False)  # Set fp16=True if using a GPU
     text = result["text"].strip()
     return text
 
 
 def get_llm_response(text: str) -> str:
-    """
-    Generates a response to the given text using the Llama-2 language model.
-
-    Args:
-        text (str): The input text to be processed.
-
-    Returns:
-        str: The generated response.
-    """
     response = chain.predict(input=text)
     if response.startswith("Assistant:"):
         response = response[len("Assistant:") :].strip()
     return response
 
 
-def play_audio(sample_rate, audio_array):
-    """
-    Plays the given audio data using the sounddevice library.
+if __name__ == '__main__':
+    os.makedirs('audio_files', exist_ok=True)
+    app.run(host='0.0.0.0', port=5000)
 
-    Args:
-        sample_rate (int): The sample rate of the audio data.
-        audio_array (numpy.ndarray): The audio data to be played.
-
-    Returns:
-        None
-    """
-    sd.play(audio_array, sample_rate)
-    sd.wait()
-
-
-if __name__ == "__main__":
-    console.print("[cyan]Assistant started! Press Ctrl+C to exit.")
-
-    try:
-        while True:
-            console.input(
-                "Press Enter to start recording, then press Enter again to stop."
-            )
-
-            data_queue = Queue()  # type: ignore[var-annotated]
-            stop_event = threading.Event()
-            recording_thread = threading.Thread(
-                target=record_audio,
-                args=(stop_event, data_queue),
-            )
-            recording_thread.start()
-
-            input()
-            stop_event.set()
-            recording_thread.join()
-
-            audio_data = b"".join(list(data_queue.queue))
-            audio_np = (
-                np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-            )
-
-            if audio_np.size > 0:
-                with console.status("Transcribing...", spinner="earth"):
-                    text = transcribe(audio_np)
-                console.print(f"[yellow]You: {text}")
-
-                with console.status("Generating response...", spinner="earth"):
-                    response = get_llm_response(text)
-                    sample_rate, audio_array = tts.long_form_synthesize(response)
-
-                console.print(f"[cyan]Assistant: {response}")
-                play_audio(sample_rate, audio_array)
-            else:
-                console.print(
-                    "[red]No audio recorded. Please ensure your microphone is working."
-                )
-
-    except KeyboardInterrupt:
-        console.print("\n[red]Exiting...")
-
-    console.print("[blue]Session ended.")
