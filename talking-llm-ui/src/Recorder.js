@@ -41,13 +41,13 @@ const Recorder = () => {
 
                     const userMessage = {
                         role: 'user',
-                        content: response.data.text, // Whisper 转换后的文本
+                        content: response.data.text,
                     };
                     setChatHistory(prevHistory => [...prevHistory, userMessage]);
 
                     const assistantMessage = {
                         role: 'assistant',
-                        content: response.data.ollama_response_text, // Ollama 生成的响应文本
+                        content: response.data.ollama_response_text, 
                     };
                     setChatHistory(prevHistory => [...prevHistory, assistantMessage]);
 
