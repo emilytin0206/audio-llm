@@ -59,9 +59,11 @@ def convert_audio():
     if audio_np.size > 0:
         print("whisper work....")
         text = transcribe(audio_np)
+        print(f"Transcribed text: {text}")
         try:
             print("ollama work....")
             response_text = get_llm_response(text)
+            print(f"Ollama response: {response_text}")
         except requests.ConnectionError as e:
             return jsonify(error="Failed to connect to Ollama server: " + str(e)), 500
 
@@ -69,8 +71,8 @@ def convert_audio():
         sample_rate, audio_array = tts.long_form_synthesize(response_text)
 
         #for debug
-        # print("Sample rate:", sample_rate)
-        # print("Audio array first 10 samples:", audio_array[:10])
+        print("Sample rate:", sample_rate)
+        print("Audio array first 10 samples:", audio_array[:10])
 
 
         max_int16 = np.iinfo(np.int16).max
@@ -79,14 +81,16 @@ def convert_audio():
         byte_stream = BytesIO()
         write_wav(byte_stream, sample_rate, audio_array)
         byte_stream.seek(0)
+        audio_data = byte_stream.read()
 
-        return send_file(
-            byte_stream,
-            mimetype='audio/wav',
-            as_attachment=True,
-            download_name='response.wav'
-        )
+        response_data = {
+            'audio': audio_data.decode('latin1'),
+            'text': text,
+            'ollama_response_text': response_text
+        }
+        return jsonify(response_data)
     else:
+        print("No audio recorded")
         return jsonify(error="No audio recorded"), 400
 
 
@@ -104,6 +108,5 @@ def get_llm_response(text: str) -> str:
 
 
 if __name__ == '__main__':
-    os.makedirs('audio_files', exist_ok=True)
     app.run(host='0.0.0.0', port=5000)
 

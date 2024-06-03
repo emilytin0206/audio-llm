@@ -31,19 +31,32 @@ const Recorder = () => {
                 formData.append('audio', audioBlob);
 
                 try {
-                    const response = await axios.post('http://localhost:5000/api/convert', formData, { responseType: 'blob' });
-
-                    const audioUrl = URL.createObjectURL(response.data);
+                    const response = await axios.post('http://localhost:5000/api/convert', formData);
+                    const audioData = response.data.audio;
+                    const audioArrayBuffer = new Uint8Array([...audioData].map(char => char.charCodeAt(0))).buffer;
+                    const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
                     const audio = new Audio(audioUrl);
                     audio.play();
 
+                    const userMessage = {
+                        role: 'user',
+                        content: response.data.text, // Whisper 转换后的文本
+                    };
+                    setChatHistory(prevHistory => [...prevHistory, userMessage]);
+
                     const assistantMessage = {
                         role: 'assistant',
-                        content: 'Audio response received and playing...',
+                        content: response.data.ollama_response_text, // Ollama 生成的响应文本
                     };
                     setChatHistory(prevHistory => [...prevHistory, assistantMessage]);
+
                 } catch (error) {
                     console.error('Error sending audio to server:', error);
+                    if (error.response) {
+                        console.error('Server responded with status code:', error.response.status);
+                        console.error('Response data:', error.response.data);
+                    }
                     setChatHistory(prevHistory => [...prevHistory, { role: 'system', content: 'Error sending audio to server.' }]);
                 }
             };
