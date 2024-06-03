@@ -47,14 +47,29 @@ def convert_audio():
     audio_file = request.files['audio']
     audio_data = audio_file.read()
 
-    try:
+    print("Initial audio data length:", len(audio_data))
+    try:        
         print("receive audio...")
+        webm_np = np.frombuffer(audio_data, dtype=np.uint8)
+        print("WebM audio data first 10 samples:", webm_np[:10])
+
         audio = AudioSegment.from_file(BytesIO(audio_data), format="webm")
+
+
         byte_stream = BytesIO()
         audio.export(byte_stream, format="wav")
-        audio_np = np.array(audio.get_array_of_samples()).astype(np.float32) / 32768.0
+        byte_stream.seek(0)
+        wav_data = byte_stream.read()
+        audio_np = np.frombuffer(wav_data, dtype=np.int16).astype(np.float32) / 32768.0
+  
+
+        wav_np = np.frombuffer(wav_data, dtype=np.int16)
+        print("WAV audio data first 10 samples:", wav_np[:10])
     except Exception as e:
         return jsonify(error=str(e)), 400
+
+    print("Converted audio data length:", len(audio_np))
+
 
     if audio_np.size > 0:
         print("whisper work....")
