@@ -19,7 +19,7 @@ This project is a local talking LLM (Large Language Model) application that allo
 ## Setup
 1. **Clone the repository**
    ```sh
-   git clone https://github.com/yourusername/local-talking-llm.git
+   git clone https://github.com/emilytin0206/audio-llm.git
    cd local-talking-llm
 2. **Virtual environment**
    u can use miniconda3
